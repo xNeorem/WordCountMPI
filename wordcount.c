@@ -15,7 +15,7 @@ const int DIRNAME_LEN = strlen(DIRNAME);
 #define MAX_FILE 40
 #define WORD_SIZE 30
 
-const char delim[] = "\n  \n\r,.:;\t()\"'?!";
+const char delim[] = "\n  \n\r,.:;\t()\"?!";
 const int delim_size = strlen(delim);
 
 #define error_mpi(_msg_) { \
