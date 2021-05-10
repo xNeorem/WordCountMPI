@@ -81,8 +81,6 @@ int isdelim(char value){
 
 int padding(MyFile *file, long pos,char * padding_buffer){
 
- 
-    
     FILE *stream = fopen(file->name, "rt");
     fseek(stream, pos, SEEK_SET);
 
