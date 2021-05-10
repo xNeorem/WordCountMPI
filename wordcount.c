@@ -128,6 +128,22 @@ int calc_max(int *array,int size){
     return max;
 }
 
+void reduce(struct hashmap *map, Word *words, int size){
+
+    Word *temp;
+
+    for (int j=0; j < size; j++){
+
+        temp = hashmap_get(map, &words[j]);
+        if(!temp){
+            hashmap_set(map,&words[j]);
+        }
+        else
+            temp->frequecy += words[j].frequecy;
+
+    }
+}
+
 
 int main(int argc, char **argv){
 
@@ -317,38 +333,70 @@ int main(int argc, char **argv){
 
     }else if(rank == 0){
 
-        MPI_Status status;
-        int n_items[world_size];
+        int k = 1;
+        int flags[world_size],n_items[world_size];
+        MPI_Status status[world_size];
+        flags[0] = 0;
+        int curr_buff_size = 0;
+        Word *buff;
+        while(k <= world_size-1)
+            for(int i=1; i < world_size; i++){
+                MPI_Iprobe(i, 1, MPI_COMM_WORLD, &flags[i], &status[i]);
+                if(flags[i]){
 
-        n_items[0] = 0;
+                    MPI_Get_count(&status[i], MPI_MY_WORD, &n_items[i]);
+                    printf("%d size %d k %d\n",i,n_items[i],k);
+                    fflush(stdout);
+                    if(n_items[i] > curr_buff_size){
 
-        for(int i=1; i < world_size; i++){
-            MPI_Probe(i, 1, MPI_COMM_WORLD, &status);
-            MPI_Get_count(&status, MPI_MY_WORD, &n_items[i]);
-        }
+                        buff = realloc(buff,n_items[i]* sizeof(Word));
+                        if(!buff)
+                            error_mpi("cannot allocate buff in master to recive data from workers.");
 
-        int max = calc_max(n_items,world_size);
+                        curr_buff_size = n_items[i];
 
-        Word *buff = malloc(sizeof(Word) * max);
-        if(!buff)
-            error_mpi("cannot allocate buff in master to recive data from workers.");
+                        }
         
-        for(int i=1; i < world_size; i++){
-            printf("from %d recived %d\n",i,n_items[i]);
-            MPI_Recv(buff, n_items[i], MPI_MY_WORD, i, 1, MPI_COMM_WORLD, &status);
-            for (int j=0; j < n_items[i];j++){
+                    MPI_Recv(buff, n_items[i], MPI_MY_WORD, i, 1, MPI_COMM_WORLD, &status[i]);
 
-                temp = hashmap_get(map, &buff[j]);
-                if(!temp){
-                    hashmap_set(map,&buff[j]);
+                    reduce(map,buff,n_items[i]);
+                    k++;
                 }
-                else
-                    temp->frequecy += buff[j].frequecy;
 
             }
-        }
+            free(buff);
+        // MPI_Status status;
+        // int n_items[world_size];
 
-        free(buff);
+        // n_items[0] = 0;
+
+        // for(int i=1; i < world_size; i++){
+        //     MPI_Probe(i, 1, MPI_COMM_WORLD, &status);
+        //     MPI_Get_count(&status, MPI_MY_WORD, &n_items[i]);
+        // }
+
+        // int max = calc_max(n_items,world_size);
+
+        // Word *buff = malloc(sizeof(Word) * max);
+        // if(!buff)
+        //     error_mpi("cannot allocate buff in master to recive data from workers.");
+        
+        // for(int i=1; i < world_size; i++){
+        //     printf("from %d recived %d\n",i,n_items[i]);
+        //     MPI_Recv(buff, n_items[i], MPI_MY_WORD, i, 1, MPI_COMM_WORLD, &status);
+        //     for (int j=0; j < n_items[i];j++){
+
+        //         temp = hashmap_get(map, &buff[j]);
+        //         if(!temp){
+        //             hashmap_set(map,&buff[j]);
+        //         }
+        //         else
+        //             temp->frequecy += buff[j].frequecy;
+
+        //     }
+        // }
+
+        // free(buff);
 
         int mapSize = hashmap_count(map);
 
