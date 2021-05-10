@@ -135,7 +135,11 @@ int main(int argc, char **argv){
 
     int world_size, rank;
 
+
     MPI_Init(&argc, &argv);
+
+    double starttime = MPI_Wtime();
+
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
@@ -146,7 +150,7 @@ int main(int argc, char **argv){
         offsetof(Word, frequecy),
     };
     
-    printf("%ld %ld\n",offsetof(Word, word),offsetof(Word, frequecy));
+    // printf("%ld %ld\n",offsetof(Word, word),offsetof(Word, frequecy));
 
     MPI_Datatype MPI_MY_WORD;
     MPI_Type_create_struct(2, blocklengths, offsets, types, &MPI_MY_WORD);
@@ -177,7 +181,7 @@ int main(int argc, char **argv){
             strcat(myFiles[n].name,dir->d_name);
 
             stat(myFiles[n].name, &st);
-            printf("%s %ld\n", dir->d_name,st.st_size);
+            // printf("%s %ld\n", dir->d_name,st.st_size);
             myFiles[n].file_size = st.st_size;
             size += st.st_size;
             myFiles[n].index = size;
@@ -190,7 +194,7 @@ int main(int argc, char **argv){
 
     closedir(d);
 
-    printf("size %ld\n",size);
+    // printf("size %ld\n",size);
 
 
     long byte_for_process = (size % world_size != 0) ? (size/world_size) + 1 : size/world_size;
@@ -223,7 +227,7 @@ int main(int argc, char **argv){
 
         enda[i] += padd[i];
 
-        printf("rank %d p(%d) start:%ld end:%ld index : %d  index_end: %d pad %d byte %ld\n",rank,i,start[i],enda[i],startIndex[i],endIndex[i],padd[i],byte_for_process);
+        // printf("rank %d p(%d) start:%ld end:%ld index : %d  index_end: %d pad %d byte %ld\n",rank,i,start[i],enda[i],startIndex[i],endIndex[i],padd[i],byte_for_process);
 
     }
 
@@ -247,7 +251,7 @@ int main(int argc, char **argv){
         stream = fopen(myFiles[index].name, "r");
         fseek(stream,starting, SEEK_SET );
         read_byte += fread(buffer+read_byte, sizeof(char), buffer_size-read_byte, stream);
-        printf("P(%d) opening %s index %d starting %ld byte_read %d n_file %d\n",rank,myFiles[index].name,index,starting,read_byte,n_file);
+        // printf("P(%d) opening %s index %d starting %ld byte_read %d n_file %d\n",rank,myFiles[index].name,index,starting,read_byte,n_file);
         fclose(stream);
 
         if(n_file){
@@ -334,7 +338,7 @@ int main(int argc, char **argv){
             error_mpi("cannot allocate buff in master to recive data from workers.");
         
         for(int i=1; i < world_size; i++){
-            printf("from %d recived %d\n",i,n_items[i]);
+            // printf("from %d recived %d\n",i,n_items[i]);
             MPI_Recv(buff, n_items[i], MPI_MY_WORD, i, 1, MPI_COMM_WORLD, &status);
             for (int j=0; j < n_items[i];j++){
 
@@ -366,8 +370,11 @@ int main(int argc, char **argv){
         for(int i = 0; i < data.i; i++)
             sum += to_array[i].frequecy;
 
+        double end = MPI_Wtime();
 
-        printf("Mapsize: %d, total words : %d\n",mapSize,sum);
+
+
+        printf("Word Size: %d Mapsize: %d total words : %d in %f\n",world_size,mapSize,sum,end - starttime);
 
         char filename[20];
         sprintf(filename, "fileresult%d.txt",world_size);
