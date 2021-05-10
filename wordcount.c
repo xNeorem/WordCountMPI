@@ -213,7 +213,7 @@ int main(int argc, char **argv){
         endIndex[i] = binarySearch(myFiles, 0, n - 1, enda[i],0);
         
 
-        if(enda[i] > size){
+        if(enda[i] >= size){
             padd[i] = size - enda[i];
             enda[i] = size;
         }else{
