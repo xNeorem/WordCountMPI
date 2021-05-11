@@ -164,11 +164,10 @@ Job* mapping_jobs(MyFile *myFiles,int file_n,int total_files_size,int world_size
 
         if(jobs[i].end >= total_files_size){
             padd[i] = total_files_size - jobs[i].end;
-            jobs[i].end = total_files_size;
             jobs[i].endIndex = file_n - 1;
         }else{
-            long end = (jobs[i].endIndex == 0) ? jobs[i].end : jobs[i].end - myFiles[jobs[i-1].endIndex].index;
-            padd[i] = (jobs[i].end > total_files_size) ? 0 : padding(&myFiles[jobs[i].endIndex],end,padding_buffer);
+            long end = (jobs[i].endIndex == 0) ? jobs[i].end : jobs[i].end - myFiles[jobs[i].endIndex - 1].index;
+            padd[i] = padding(&myFiles[jobs[i].endIndex],end,padding_buffer);
         }
 
         jobs[i].end += padd[i];
@@ -327,11 +326,14 @@ int main(int argc, char **argv){
 
     buffer[read_byte++] ='\0';
 
-    // char filename[20];
-    // sprintf(filename, "file%d.txt",rank);
-    // FILE *fp = fopen( filename , "w" );
-    // fwrite(buffer, 1 , buffer_size , fp );
-    // fclose(fp);
+    
+    #ifdef DEBUG
+        char filename[20];
+        sprintf(filename, "file%d.txt",rank);
+        FILE *fp = fopen( filename , "w" );
+        fwrite(buffer, 1 , buffer_size , fp );
+        fclose(fp);
+    #endif
 
     struct hashmap *map = hashmap_new(sizeof(Word), 0, 0, 0,word_hash, word_compare, NULL);
                                      
@@ -437,21 +439,17 @@ int main(int argc, char **argv){
 
         printf("word size %d Mapsize: %d total words : %d in %f\n",world_size,mapSize,sum,end-starttime);
 
-        // char filename[20];
-        // sprintf(filename, "fileresult%d.txt",world_size);
-        // FILE *fp = fopen( filename , "w" );
-        // for(int i = 0; i < data.i; i++) 
-        //     fprintf(fp,"%s %d\n",data.array[i].word,data.array[i].frequecy);
-        // //fwrite(buffer, 1 , buffer_size , fp );
-        // fclose(fp);
+        #ifdef DEBUG
+            char filename[20];
+            sprintf(filename, "fileresult%d.txt",world_size);
+            FILE *fp = fopen( filename , "w" );
+            for(int i = 0; i < data.i; i++) 
+                fprintf(fp,"%s %d\n",data.array[i].word,data.array[i].frequecy);
+            fclose(fp);
+        #endif
+
 
         free(to_array);
-        
-        //printf("\n-- iterate over all users --\n");
-        //hashmap_scan(map, word_iter, NULL);
-
-
-
     }
 
     MPI_Type_free(&MPI_MY_WORD);
