@@ -2,7 +2,7 @@ CC = mpicc
 HEADERS = hashmap.c
 MAIN = wordcount
 OUT_FOLDER = ./out/
-NP = 60
+NP = 20
 
 compile:
 	$(CC) -o $(OUT_FOLDER)$(MAIN) $(HEADERS) $(MAIN).c
