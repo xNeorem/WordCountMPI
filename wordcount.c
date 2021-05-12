@@ -8,9 +8,6 @@
 
 #include "mpi.h"
 
-#define DIRNAME "./files/"
-const int DIRNAME_LEN = strlen(DIRNAME);
-
 #define FILENAME_SIZE 100
 #define MAX_FILE 40
 #define WORD_SIZE 30
@@ -208,6 +205,9 @@ int main(int argc, char **argv){
 
     MPI_Init(&argc, &argv);
 
+    if(argc != 2)
+        error_mpi("Paramiters must be 2.")
+
     double starttime = MPI_Wtime();
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -240,7 +240,8 @@ int main(int argc, char **argv){
     struct dirent *dir;
     struct stat st;
     long size = 0;
-    d = opendir(DIRNAME);
+    char *dirname = argv[1];
+    d = opendir(dirname);
 
     MyFile myFiles[MAX_FILE];
     int n = 0;
@@ -249,14 +250,16 @@ int main(int argc, char **argv){
     if (!d)
         error_mpi("cannot open file's directory.")
 
+    const int dirname_len = strlen(argv[1]);
+
     while ((dir = readdir(d)) != NULL){
 
         if (dir->d_type == DT_REG) {
 
-            if(DIRNAME_LEN + strlen(dir->d_name) > FILENAME_SIZE)
+            if(dirname_len + strlen(dir->d_name) > FILENAME_SIZE)
                 error_mpi("file name to long for buffer size, increment it.");
                 
-            strcpy(myFiles[n].name,DIRNAME);
+            strcpy(myFiles[n].name,dirname);
             strcat(myFiles[n].name,dir->d_name);
 
             stat(myFiles[n].name, &st);
