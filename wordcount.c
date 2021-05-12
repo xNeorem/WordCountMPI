@@ -16,6 +16,7 @@ const int DIRNAME_LEN = strlen(DIRNAME);
 #define WORD_SIZE 30
 
 //#define DEBUG 1
+#define BENCHMARK
 
 const char delim[] = "\n  \n\r,.:;\t()\"?!";
 const int delim_size = strlen(delim);
@@ -326,7 +327,6 @@ int main(int argc, char **argv){
 
     buffer[read_byte++] ='\0';
 
-    
     #ifdef DEBUG
         char filename[20];
         sprintf(filename, "file%d.txt",rank);
@@ -337,10 +337,13 @@ int main(int argc, char **argv){
 
     struct hashmap *map = hashmap_new(sizeof(Word), 0, 0, 0,word_hash, word_compare, NULL);
                                      
-    char * token = strtok(buffer, delim);
+    char * token = strtok(buffer, delim), *p;
     Word *temp,key;
     while( token != NULL ) {
-        
+
+        p = token;
+        for ( ; *p; ++p) *p = tolower(*p);
+
         strcpy( key.word, token);
         temp = hashmap_get(map, &key);
         if(!temp){
@@ -397,7 +400,11 @@ int main(int argc, char **argv){
                 if(flags[i]){
 
                     MPI_Get_count(&status[i], MPI_MY_WORD, &n_items[i]);
-                    // printf("%d size %d k %d\n",i,n_items[i],k);
+
+                    #ifdef DEBUG
+                        printf("DBG P(%d) %d size %d k %d\n",rank,i,n_items[i],k);
+                    #endif
+
                     fflush(stdout);
                     if(n_items[i] > curr_buff_size){
 
@@ -435,9 +442,22 @@ int main(int argc, char **argv){
         for(int i = 0; i < data.i; i++)
             sum += to_array[i].frequecy;
 
-        double end = MPI_Wtime();
+        double endtime = MPI_Wtime();
 
-        printf("word size %d Mapsize: %d total words : %d in %f\n",world_size,mapSize,sum,end-starttime);
+        #ifdef BENCHMARK
+        FILE *fpbm;
+        fpbm = fopen("benchmark.txt", "a");
+        fprintf(fpbm, "%d %f %f %f %d %ld %d \n",world_size,starttime,endtime,endtime-starttime,n,size,sum);
+        #endif
+
+        printf("word size %d Mapsize: %d total words : %d in %f\n",world_size,mapSize,sum,endtime-starttime);
+
+        FILE *fpcsv;
+        fpcsv = fopen("risultati.csv", "w"); 
+        fprintf(fpcsv, "word,Frequency\n");
+        for (int i = 0; i < data.i; i++)
+            fprintf(fpcsv, "\"%s\",%d\n", to_array[i].word, to_array[i].frequecy);
+        fclose(fpcsv);
 
         #ifdef DEBUG
             char filename[20];
