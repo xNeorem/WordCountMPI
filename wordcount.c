@@ -15,6 +15,8 @@ const int DIRNAME_LEN = strlen(DIRNAME);
 #define MAX_FILE 40
 #define WORD_SIZE 30
 
+#define OUTDIRNAME "./out/"
+
 //#define DEBUG 1
 #define BENCHMARK
 
@@ -142,6 +144,9 @@ Job* mapping_jobs(MyFile *myFiles,int file_n,int total_files_size,int world_size
 
     long byte_for_process = (total_files_size % world_size != 0) ? (total_files_size/world_size) + 1 : total_files_size/world_size;
 
+    if(byte_for_process < WORD_SIZE)
+        error_mpi("Too many core for small file.")
+
     Job *jobs = malloc(sizeof(Job) * world_size);
     if(!jobs)
         error_mpi("Cannot allocate jobs buffer.");
@@ -161,8 +166,7 @@ Job* mapping_jobs(MyFile *myFiles,int file_n,int total_files_size,int world_size
 
         jobs[i].startIndex = binarySearch(myFiles, 0, file_n - 1, jobs[i].start,0);
         jobs[i].endIndex = binarySearch(myFiles, 0, file_n - 1, jobs[i].end,0);
-        
-
+            
         if(jobs[i].end >= total_files_size){
             padd[i] = total_files_size - jobs[i].end;
             jobs[i].endIndex = file_n - 1;
@@ -271,6 +275,9 @@ int main(int argc, char **argv){
     }
 
     closedir(d);
+
+    if(!n)
+        error_mpi("No files found.");
 
     #ifdef DEBUG
         if(rank == 0)
@@ -444,16 +451,22 @@ int main(int argc, char **argv){
 
         double endtime = MPI_Wtime();
 
+        char name[50];
+
         #ifdef BENCHMARK
         FILE *fpbm;
-        fpbm = fopen("benchmark.txt", "a");
+        strcpy(name,OUTDIRNAME);
+        strcat(name,"benchmark.txt");
+        fpbm = fopen(name, "a");
         fprintf(fpbm, "%d %f %f %f %d %ld %d \n",world_size,starttime,endtime,endtime-starttime,n,size,sum);
         #endif
 
         printf("word size %d Mapsize: %d total words : %d in %f\n",world_size,mapSize,sum,endtime-starttime);
 
         FILE *fpcsv;
-        fpcsv = fopen("risultati.csv", "w"); 
+        strcpy(name,OUTDIRNAME);
+        strcat(name,"risultati.csv");
+        fpcsv = fopen(name, "w"); 
         fprintf(fpcsv, "word,Frequency\n");
         for (int i = 0; i < data.i; i++)
             fprintf(fpcsv, "\"%s\",%d\n", to_array[i].word, to_array[i].frequecy);
