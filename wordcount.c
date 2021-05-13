@@ -86,6 +86,9 @@ int isdelim(char value){
 
 int padding(MyFile *file, long pos,char * padding_buffer){
 
+    if(pos >= file->file_size)
+        return 0;
+
     FILE *stream = fopen(file->name, "rt");
     fseek(stream, pos, SEEK_SET);
 
@@ -101,7 +104,7 @@ int padding(MyFile *file, long pos,char * padding_buffer){
     fclose(stream);
 
     #ifdef DEBUG
-        printf("DBG (PADDING) %s %s %d\n",file->name,padding_buffer,count);
+        printf("DBG (PADDING) filename : %s padding buffer : %s count : %d size : %d pos :%ld\n",file->name,padding_buffer,count,size,pos);
     #endif
 
     return count;
@@ -120,7 +123,7 @@ int binarySearch(MyFile arr[], int l, int r, long x,int curr){
     }
 
     #ifdef DEBUG
-        printf("DBG (binarySearch) %ld x > %ld\n",x,arr[curr].index);
+        printf("DBG (binarySearch) %ld x > %ld curr %d\n",x,arr[curr].index,curr);
     #endif
 
 
@@ -166,13 +169,18 @@ Job* mapping_jobs(MyFile *myFiles,int file_n,int total_files_size,int world_size
             
         if(jobs[i].end >= total_files_size){
             padd[i] = total_files_size - jobs[i].end;
-            jobs[i].endIndex = file_n - 1;
+            jobs[i].endIndex = file_n - 1 ;
         }else{
             long end = (jobs[i].endIndex == 0) ? jobs[i].end : jobs[i].end - myFiles[jobs[i].endIndex - 1].index;
             padd[i] = padding(&myFiles[jobs[i].endIndex],end,padding_buffer);
         }
 
         jobs[i].end += padd[i];
+
+        #ifdef DEBUG
+            printf("DBG (mapping_jobs) job: %d start: %ld end :%ld end_before_pad %ld pad %d indexStart:%d indexEnd:%d \n",i,
+                    jobs[i].start,jobs[i].end,jobs[i].end - padd[i],padd[i],jobs[i].startIndex,jobs[i].endIndex);
+        #endif
 
     }
 
@@ -284,7 +292,7 @@ int main(int argc, char **argv){
 
     #ifdef DEBUG
         if(rank == 0)
-            printf("DBG P(%d) size all file%ld\n",rank,size);
+            printf("DBG P(%d) size all file %ld\n",rank,size);
     #endif
 
 
@@ -351,8 +359,8 @@ int main(int argc, char **argv){
     Word *temp,key;
     while( token != NULL ) {
 
-        p = token;
-        for ( ; *p; ++p) *p = tolower(*p);
+        // p = token;
+        // for ( ; *p; ++p) *p = tolower(*p);
 
         strcpy( key.word, token);
         temp = hashmap_get(map, &key);
@@ -388,7 +396,7 @@ int main(int argc, char **argv){
             int sum = 0;
             for(int i = 0; i < data.i; i++)
                 sum += to_send_array[i].frequecy;
-            printf("DBG P(%d) data in array : %d last elemeent %s %d sum %d\n",rank,data.i,data.array[2].word,data.array[2].frequecy,sum);
+            printf("DBG P(%d) data in array : %d first elemeent %s %d sum %d\n",rank,data.i,data.array[0].word,data.array[0].frequecy,sum);
         #endif
 
         MPI_Send(data.array, data.i, MPI_MY_WORD, 0, 1, MPI_COMM_WORLD);
