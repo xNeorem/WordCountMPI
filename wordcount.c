@@ -14,7 +14,7 @@
 
 #define OUTDIRNAME "./out/"
 
-//#define DEBUG 1
+#define DEBUG 1
 #define BENCHMARK
 
 const char delim[] = "\n  \n\r,.:;\t()\"?!";
