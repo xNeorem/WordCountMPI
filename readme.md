@@ -47,7 +47,7 @@ Separators table
 Separator | 
 :---:|
 `\n` |
-`&#124` |
+`(space)`(space)(space) |
 `\n\r` |
 `,` |
 `.` |
@@ -103,7 +103,7 @@ How Algorithm works
 
 4. Each process counts the words occurrences in the lines present in the byte block using an `hashmap`. 
 
-5. The computed occurrences are sent to the master which merges the partial results and plots the final result.
+5. The computed occurrences are sent to the master which merges the partial results and save the data in alphabetical order in a csv file.
 
 Execution instructions
 ======================
