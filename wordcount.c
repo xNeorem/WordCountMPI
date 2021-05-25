@@ -282,11 +282,12 @@ int main(int argc, char **argv){
 
     int world_size, rank;
 
+
     MPI_Init(&argc, &argv);
 
     if(argc != 2)
         error_mpi("Paramiters must be 2.")
-
+      
     double starttime = MPI_Wtime();
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -346,6 +347,7 @@ int main(int argc, char **argv){
             #ifdef DEBUG
                 printf("DBG P(%d) %s %ld\n",rank,dir->d_name,st.st_size);
             #endif
+          
             myFiles[n].file_size = st.st_size;
             size += st.st_size;
             myFiles[n].index = size;
@@ -357,7 +359,7 @@ int main(int argc, char **argv){
     }
 
     closedir(d);
-
+  
     if(!n)
         error_mpi("No files found.");
 
@@ -377,7 +379,6 @@ int main(int argc, char **argv){
     #ifdef DEBUG
         printf("DBG P(%d) start %ld end %ld startIndex %d endIndex %d\n",rank,job.start,job.end,job.startIndex,job.endIndex);
     #endif
-
 
     int index = job.startIndex;
     int indexEnd = job.endIndex;
@@ -504,9 +505,9 @@ int main(int argc, char **argv){
                         curr_buff_size = n_items[i];
 
                         }
-        
+    
                     MPI_Recv(buff, n_items[i], MPI_MY_WORD, i, 1, MPI_COMM_WORLD, &status[i]);
-
+                  
                     reduce(map,buff,n_items[i]);
                     k++;
                 }
