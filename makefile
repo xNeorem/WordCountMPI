@@ -3,6 +3,7 @@ HEADERS = hashmap.c
 MAIN = wordcount
 OUT_FOLDER = ./out/
 FILE_FOLDER = ./files/
+OTHER_FILE_FOLDER = ./other_files/
 NP = 6
 N = 10
 
@@ -22,9 +23,9 @@ strong:
 	for i in `seq 1 39`; do rm "$(FILE_FOLDER)test_$$i.txt" ; done
 	echo "Files cleaned. strong done."
 
-week:
-	for i in `seq 1 8`; do cp $(FILE_FOLDER)merged_file.txt "$(FILE_FOLDER)test_$$i.txt" && mpirun --allow-run-as-root -np $$i $(OUT_FOLDER)$(MAIN) $(FILE_FOLDER); done
+weak:
+	for i in `seq 1 8`; do cp $(OTHER_FILE_FOLDER)merged_file.txt "$(FILE_FOLDER)test_$$i.txt" && mpirun --allow-run-as-root -np $$i $(OUT_FOLDER)$(MAIN) $(FILE_FOLDER); done
 	for i in `seq 1 8`; do rm "$(FILE_FOLDER)test_$$i.txt" ; done
-	echo "Files cleaned. week done."
+	echo "Files cleaned. weak done."
 
 benchmark: strong week

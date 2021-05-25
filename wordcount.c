@@ -9,12 +9,12 @@
 #include "mpi.h"
 
 #define FILENAME_SIZE 100
-#define MAX_FILE 40
+#define MAX_FILE 70
 #define WORD_SIZE 30
 
 #define OUTDIRNAME "./out/"
 
-#define DEBUG 1
+//#define DEBUG 1
 #define BENCHMARK
 
 const char delim[] = "\n  \n\r,.:;\t()\"?!";
@@ -73,6 +73,77 @@ uint64_t word_hash(const void *item, uint64_t seed0, uint64_t seed1) {
     const Word *word = item;
     return hashmap_sip(word->word, strlen(word->word), seed0, seed1);
 }
+
+
+void merge(Word arr[], int l, int m, int r){
+	int i, j, k;
+	int n1 = m - l + 1;
+	int n2 = r - m;
+
+	/* create temp arrays */
+	Word *L = malloc(sizeof(Word)*n1), *R = malloc(sizeof(Word)*n2);
+    if(!L || !R)
+        error_mpi("Cannot allocate L end R to order Word");
+
+	/* Copy data to temp arrays L[] and R[] */
+	for (i = 0; i < n1; i++)
+		L[i] = arr[l + i];
+	for (j = 0; j < n2; j++)
+		R[j] = arr[m + 1 + j];
+
+	/* Merge the temp arrays back into arr[l..r]*/
+	i = 0; // Initial index of first subarray
+	j = 0; // Initial index of second subarray
+	k = l; // Initial index of merged subarray
+	while (i < n1 && j < n2) {
+		if (strcmp(L[i].word,R[j].word) <= 0) {
+			arr[k] = L[i];
+			i++;
+		}
+		else {
+			arr[k] = R[j];
+			j++;
+		}
+		k++;
+	}
+
+	/* Copy the remaining elements of L[], if there
+	are any */
+	while (i < n1) {
+		arr[k] = L[i];
+		i++;
+		k++;
+	}
+
+	/* Copy the remaining elements of R[], if there
+	are any */
+	while (j < n2) {
+		arr[k] = R[j];
+		j++;
+		k++;
+	}
+
+    free(L);
+    free(R);
+}
+
+/* l is for left index and r is right index of the
+sub-array of arr to be sorted */
+void mergeSort(Word arr[], int l, int r){
+	if (l < r) {
+		// Same as (l+r)/2, but avoids overflow for
+		// large l and h
+		int m = l + (r - l) / 2;
+
+		// Sort first and second halves
+		mergeSort(arr, l, m);
+		mergeSort(arr, m + 1, r);
+
+		merge(arr, l, m, r);
+	}
+}
+
+
 
 int isdelim(char value){
 
@@ -301,6 +372,7 @@ int main(int argc, char **argv){
         jobs = mapping_jobs(myFiles,n,size,world_size);
 
     MPI_Scatter(jobs, 1, MPI_MY_JOB, &job, 1, MPI_MY_JOB, 0, MPI_COMM_WORLD);
+    free(jobs);
 
     #ifdef DEBUG
         printf("DBG P(%d) start %ld end %ld startIndex %d endIndex %d\n",rank,job.start,job.end,job.startIndex,job.endIndex);
@@ -359,8 +431,8 @@ int main(int argc, char **argv){
     Word *temp,key;
     while( token != NULL ) {
 
-        // p = token;
-        // for ( ; *p; ++p) *p = tolower(*p);
+        p = token;
+        for ( ; *p; ++p) *p = tolower(*p);
 
         strcpy( key.word, token);
         temp = hashmap_get(map, &key);
@@ -403,7 +475,7 @@ int main(int argc, char **argv){
 
         free(to_send_array);
 
-    }else if(rank == 0){
+    }else{
 
         int k = 1;
         int flags[world_size],n_items[world_size];
@@ -423,7 +495,6 @@ int main(int argc, char **argv){
                         printf("DBG P(%d) %d size %d k %d\n",rank,i,n_items[i],k);
                     #endif
 
-                    fflush(stdout);
                     if(n_items[i] > curr_buff_size){
 
                         buff = realloc(buff,n_items[i]* sizeof(Word));
@@ -462,17 +533,19 @@ int main(int argc, char **argv){
 
         double endtime = MPI_Wtime();
 
+        mergeSort(to_array, 0, data.i - 1);
+
         char name[50];
 
         #ifdef BENCHMARK
-        FILE *fpbm;
-        strcpy(name,OUTDIRNAME);
-        strcat(name,"benchmark.txt");
-        fpbm = fopen(name, "a");
-        fprintf(fpbm, "%d %f %f %f %d %ld %d \n",world_size,starttime,endtime,endtime-starttime,n,size,sum);
+            FILE *fpbm;
+            strcpy(name,OUTDIRNAME);
+            strcat(name,"benchmark.txt");
+            fpbm = fopen(name, "a");
+            fprintf(fpbm, "%d %f %f %f %d %ld %d \n",world_size,starttime,endtime,endtime-starttime,n,size,sum);
         #endif
 
-        printf("word size %d Mapsize: %d total words : %d in %f\n",world_size,mapSize,sum,endtime-starttime);
+        printf("world size %d Mapsize: %d total words : %d in %f\n",world_size,mapSize,sum,endtime-starttime);
 
         FILE *fpcsv;
         strcpy(name,OUTDIRNAME);
