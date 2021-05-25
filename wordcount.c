@@ -8,19 +8,21 @@
 
 #include "mpi.h"
 
-#define DIRNAME "./files/"
-const int DIRNAME_LEN = strlen(DIRNAME);
-
 #define FILENAME_SIZE 100
-#define MAX_FILE 40
+#define MAX_FILE 70
 #define WORD_SIZE 30
+
+#define OUTDIRNAME "./out/"
+
+//#define DEBUG 1
+#define BENCHMARK
 
 const char delim[] = "\n  \n\r,.:;\t()\"?!";
 const int delim_size = strlen(delim);
 
 #define error_mpi(_msg_) { \
     fprintf(stderr, "Error: %s (%s:%d)\n", (_msg_), __FILE__, __LINE__); \
-    MPI_Finalize(); \
+    MPI_Abort(MPI_COMM_WORLD,EXIT_FAILURE); \
     exit(1); \
 }
 
@@ -30,17 +32,20 @@ typedef struct MyFile{
     long file_size;
     long index;
 }MyFile;
-
-
 typedef struct Word{
     char word[WORD_SIZE];
     int frequecy;
 }Word;
-
 struct mydata{
     Word *array;
     int i;
 };
+
+typedef struct Job{
+    long int start,end;
+    int startIndex, endIndex;
+}Job;
+
 
 int word_compare(const void *a, const void *b, void *udata) {
     const Word *ua = a;
@@ -69,6 +74,77 @@ uint64_t word_hash(const void *item, uint64_t seed0, uint64_t seed1) {
     return hashmap_sip(word->word, strlen(word->word), seed0, seed1);
 }
 
+
+void merge(Word arr[], int l, int m, int r){
+	int i, j, k;
+	int n1 = m - l + 1;
+	int n2 = r - m;
+
+	/* create temp arrays */
+	Word *L = malloc(sizeof(Word)*n1), *R = malloc(sizeof(Word)*n2);
+    if(!L || !R)
+        error_mpi("Cannot allocate L end R to order Word");
+
+	/* Copy data to temp arrays L[] and R[] */
+	for (i = 0; i < n1; i++)
+		L[i] = arr[l + i];
+	for (j = 0; j < n2; j++)
+		R[j] = arr[m + 1 + j];
+
+	/* Merge the temp arrays back into arr[l..r]*/
+	i = 0; // Initial index of first subarray
+	j = 0; // Initial index of second subarray
+	k = l; // Initial index of merged subarray
+	while (i < n1 && j < n2) {
+		if (strcmp(L[i].word,R[j].word) <= 0) {
+			arr[k] = L[i];
+			i++;
+		}
+		else {
+			arr[k] = R[j];
+			j++;
+		}
+		k++;
+	}
+
+	/* Copy the remaining elements of L[], if there
+	are any */
+	while (i < n1) {
+		arr[k] = L[i];
+		i++;
+		k++;
+	}
+
+	/* Copy the remaining elements of R[], if there
+	are any */
+	while (j < n2) {
+		arr[k] = R[j];
+		j++;
+		k++;
+	}
+
+    free(L);
+    free(R);
+}
+
+/* l is for left index and r is right index of the
+sub-array of arr to be sorted */
+void mergeSort(Word arr[], int l, int r){
+	if (l < r) {
+		// Same as (l+r)/2, but avoids overflow for
+		// large l and h
+		int m = l + (r - l) / 2;
+
+		// Sort first and second halves
+		mergeSort(arr, l, m);
+		mergeSort(arr, m + 1, r);
+
+		merge(arr, l, m, r);
+	}
+}
+
+
+
 int isdelim(char value){
 
     for(int i=0; i < delim_size; i++)
@@ -80,6 +156,9 @@ int isdelim(char value){
 
 
 int padding(MyFile *file, long pos,char * padding_buffer){
+
+    if(pos >= file->file_size)
+        return 0;
 
     FILE *stream = fopen(file->name, "rt");
     fseek(stream, pos, SEEK_SET);
@@ -94,11 +173,12 @@ int padding(MyFile *file, long pos,char * padding_buffer){
         count++;
 
     fclose(stream);
-    // printf("%s %s %d\n",file->name,padding_buffer,count);
+
+    #ifdef DEBUG
+        printf("DBG (PADDING) filename : %s padding buffer : %s count : %d size : %d pos :%ld\n",file->name,padding_buffer,count,size,pos);
+    #endif
 
     return count;
-
-
     
 }
 
@@ -113,7 +193,10 @@ int binarySearch(MyFile arr[], int l, int r, long x,int curr){
             return binarySearch(arr, mid + 1, r, x,mid);
     }
 
-    // printf("%ld x > %ld\n",x,arr[curr].index);
+    #ifdef DEBUG
+        printf("DBG (binarySearch) %ld x > %ld curr %d\n",x,arr[curr].index,curr);
+    #endif
+
 
     return (x > arr[curr].index) ? curr + 1 : curr;
 }
@@ -128,40 +211,117 @@ int calc_max(int *array,int size){
     return max;
 }
 
+Job* mapping_jobs(MyFile *myFiles,int file_n,int total_files_size,int world_size){
+
+    long byte_for_process = (total_files_size % world_size != 0) ? (total_files_size/world_size) + 1 : total_files_size/world_size;
+
+    if(byte_for_process < WORD_SIZE)
+        error_mpi("Too many core for small file.")
+
+    Job *jobs = malloc(sizeof(Job) * world_size);
+    if(!jobs)
+        error_mpi("Cannot allocate jobs buffer.");
+
+    int padd[world_size];
+
+    char *padding_buffer = malloc(sizeof(char) * (WORD_SIZE+1));
+    if(!padding_buffer)
+        error_mpi("Cannot allocate padding buffer.");
+
+
+
+    for(int i=0; i < world_size; i++){
+
+        jobs[i].start = (i == 0) ? i*byte_for_process : jobs[i-1].end;
+        jobs[i].end = jobs[i].start + byte_for_process;
+
+        jobs[i].startIndex = binarySearch(myFiles, 0, file_n - 1, jobs[i].start,0);
+        jobs[i].endIndex = binarySearch(myFiles, 0, file_n - 1, jobs[i].end,0);
+            
+        if(jobs[i].end >= total_files_size){
+            padd[i] = total_files_size - jobs[i].end;
+            jobs[i].endIndex = file_n - 1 ;
+        }else{
+            long end = (jobs[i].endIndex == 0) ? jobs[i].end : jobs[i].end - myFiles[jobs[i].endIndex - 1].index;
+            padd[i] = padding(&myFiles[jobs[i].endIndex],end,padding_buffer);
+        }
+
+        jobs[i].end += padd[i];
+
+        #ifdef DEBUG
+            printf("DBG (mapping_jobs) job: %d start: %ld end :%ld end_before_pad %ld pad %d indexStart:%d indexEnd:%d \n",i,
+                    jobs[i].start,jobs[i].end,jobs[i].end - padd[i],padd[i],jobs[i].startIndex,jobs[i].endIndex);
+        #endif
+
+    }
+
+    free(padding_buffer);
+
+    return jobs;
+}
+
+void reduce(struct hashmap *map, Word *words, int size){
+
+    Word *temp;
+
+    for (int j=0; j < size; j++){
+
+        temp = hashmap_get(map, &words[j]);
+        if(!temp){
+            hashmap_set(map,&words[j]);
+        }
+        else
+            temp->frequecy += words[j].frequecy;
+
+    }
+}
+
 
 int main(int argc, char **argv){
 
-    //printf("size : %f",size);
 
     int world_size, rank;
 
 
     MPI_Init(&argc, &argv);
 
+    if(argc != 2)
+        error_mpi("Paramiters must be 2.")
+      
     double starttime = MPI_Wtime();
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    const MPI_Datatype types[2] = {MPI_CHAR, MPI_INT};
-    const int blocklengths[2] = {WORD_SIZE,1};
-    const MPI_Aint offsets[2] = {
+    const MPI_Datatype typesWord[2] = {MPI_CHAR, MPI_INT};
+    const int blocklengthsWord[2] = {WORD_SIZE,1};
+    const MPI_Aint offsetsWord[2] = {
         offsetof(Word, word),
         offsetof(Word, frequecy),
     };
-    
-    // printf("%ld %ld\n",offsetof(Word, word),offsetof(Word, frequecy));
 
     MPI_Datatype MPI_MY_WORD;
-    MPI_Type_create_struct(2, blocklengths, offsets, types, &MPI_MY_WORD);
+    MPI_Type_create_struct(2, blocklengthsWord, offsetsWord, typesWord, &MPI_MY_WORD);
     MPI_Type_commit(&MPI_MY_WORD);
 
+
+    const MPI_Datatype typesJob[2] = {MPI_LONG, MPI_INT};
+    const int blocklengthsJob[2] = {2,2};
+    const MPI_Aint offsetsJob[2] = {
+        offsetof(Job, start),
+        offsetof(Job, startIndex),
+    };
+
+    MPI_Datatype MPI_MY_JOB;
+    MPI_Type_create_struct(2, blocklengthsJob, offsetsJob, typesJob, &MPI_MY_JOB);
+    MPI_Type_commit(&MPI_MY_JOB);
 
     DIR *d;
     struct dirent *dir;
     struct stat st;
     long size = 0;
-    d = opendir(DIRNAME);
+    char *dirname = argv[1];
+    d = opendir(dirname);
 
     MyFile myFiles[MAX_FILE];
     int n = 0;
@@ -170,18 +330,24 @@ int main(int argc, char **argv){
     if (!d)
         error_mpi("cannot open file's directory.")
 
+    const int dirname_len = strlen(argv[1]);
+
     while ((dir = readdir(d)) != NULL){
 
         if (dir->d_type == DT_REG) {
 
-            if(DIRNAME_LEN + strlen(dir->d_name) > FILENAME_SIZE)
+            if(dirname_len + strlen(dir->d_name) > FILENAME_SIZE)
                 error_mpi("file name to long for buffer size, increment it.");
                 
-            strcpy(myFiles[n].name,DIRNAME);
+            strcpy(myFiles[n].name,dirname);
             strcat(myFiles[n].name,dir->d_name);
 
             stat(myFiles[n].name, &st);
-            // printf("%s %ld\n", dir->d_name,st.st_size);
+
+            #ifdef DEBUG
+                printf("DBG P(%d) %s %ld\n",rank,dir->d_name,st.st_size);
+            #endif
+          
             myFiles[n].file_size = st.st_size;
             size += st.st_size;
             myFiles[n].index = size;
@@ -193,57 +359,40 @@ int main(int argc, char **argv){
     }
 
     closedir(d);
+  
+    if(!n)
+        error_mpi("No files found.");
 
-    // printf("size %ld\n",size);
-
-
-    long byte_for_process = (size % world_size != 0) ? (size/world_size) + 1 : size/world_size;
-
-    long start[world_size],enda[world_size];
-    int padd[world_size],startIndex[world_size],endIndex[world_size];
-
-    char *padding_buffer = malloc(sizeof(char) * (WORD_SIZE+1));
-    if(!padding_buffer)
-        error_mpi("Cannot allocate padding buffer.");
+    #ifdef DEBUG
+        if(rank == 0)
+            printf("DBG P(%d) size all file %ld\n",rank,size);
+    #endif
 
 
+    Job *jobs,job;
+    if(rank == 0)
+        jobs = mapping_jobs(myFiles,n,size,world_size);
 
-    for(int i=0; i < world_size; i++){
+    MPI_Scatter(jobs, 1, MPI_MY_JOB, &job, 1, MPI_MY_JOB, 0, MPI_COMM_WORLD);
+    free(jobs);
 
-        start[i] = (i == 0) ? i*byte_for_process : enda[i-1];
-        enda[i] = start[i] + byte_for_process;
+    #ifdef DEBUG
+        printf("DBG P(%d) start %ld end %ld startIndex %d endIndex %d\n",rank,job.start,job.end,job.startIndex,job.endIndex);
+    #endif
 
-        startIndex[i] = binarySearch(myFiles, 0, n - 1, start[i],0);
-        endIndex[i] = binarySearch(myFiles, 0, n - 1, enda[i],0);
-        
-
-        if(enda[i] >= size){
-            padd[i] = size - enda[i];
-            enda[i] = size;
-        }else{
-            long end = (endIndex[i] == 0) ? enda[i] : enda[i]-myFiles[endIndex[i]-1].index;
-            padd[i] = (enda[i] > size) ? 0 : padding(&myFiles[endIndex[i]],end,padding_buffer);
-        }
-
-        enda[i] += padd[i];
-
-        // printf("rank %d p(%d) start:%ld end:%ld index : %d  index_end: %d pad %d byte %ld\n",rank,i,start[i],enda[i],startIndex[i],endIndex[i],padd[i],byte_for_process);
-
-    }
-
-    int index = startIndex[rank];
-    int indexEnd = endIndex[rank];
+    int index = job.startIndex;
+    int indexEnd = job.endIndex;
     int n_file = indexEnd - index;
 
-    long starting = (index == 0) ? start[rank] : start[rank]-myFiles[index-1].index;
-    int pad = padd[rank];
-    //printf("p(%d) start:%ld end:%ld index : %d  index_end: %d real_start:%ld file_size:%ld pad %d\n",rank,start[rank],enda[ran],index,indexEnd,starting,myFiles[index].index,pad);
+    long starting = (index == 0) ? job.start : job.start - myFiles[index-1].index;
+    #ifdef DEBUG
+        printf("DBG P(%d) start:%ld end:%ld index : %d  index_end: %d real_start:%ld file_size:%ld \n",rank,job.start,job.end,index,indexEnd,starting,myFiles[index].index);
+    #endif
     
-    int buffer_size = (byte_for_process/sizeof(char)) + pad + n_file;
+    int buffer_size = job.end - job.start + n_file;
     char *buffer = malloc(buffer_size+1);
     if(!buffer)
         error_mpi("cannot allocate buffer for input file.");
-
 
     FILE * stream;
     int read_byte = 0;
@@ -251,7 +400,11 @@ int main(int argc, char **argv){
         stream = fopen(myFiles[index].name, "r");
         fseek(stream,starting, SEEK_SET );
         read_byte += fread(buffer+read_byte, sizeof(char), buffer_size-read_byte, stream);
-        // printf("P(%d) opening %s index %d starting %ld byte_read %d n_file %d\n",rank,myFiles[index].name,index,starting,read_byte,n_file);
+
+        #ifdef DEBUG
+            printf("DBG P(%d) opening %s index %d starting %ld byte_read %d n_file %d\n",rank,myFiles[index].name,index,starting,read_byte,n_file);
+        #endif
+
         fclose(stream);
 
         if(n_file){
@@ -265,20 +418,23 @@ int main(int argc, char **argv){
 
     buffer[read_byte++] ='\0';
 
-    // char filename[20];
-    // sprintf(filename, "file%d.txt",rank);
-    // FILE *fp = fopen( filename , "w" );
-    // fwrite(buffer, 1 , buffer_size , fp );
-    // fclose(fp);
+    #ifdef DEBUG
+        char filename[20];
+        sprintf(filename, "file%d.txt",rank);
+        FILE *fp = fopen( filename , "w" );
+        fwrite(buffer, 1 , buffer_size , fp );
+        fclose(fp);
+    #endif
 
-    struct hashmap *map = hashmap_new(sizeof(Word), 0, 0, 0, 
-                                     word_hash, word_compare, NULL);
+    struct hashmap *map = hashmap_new(sizeof(Word), 0, 0, 0,word_hash, word_compare, NULL);
                                      
-    // const char delim[] = "\n  \n\r,.:;\t()\"'";
-    char * token = strtok(buffer, delim);
+    char * token = strtok(buffer, delim), *p;
     Word *temp,key;
     while( token != NULL ) {
-        
+
+        p = token;
+        for ( ; *p; ++p) *p = tolower(*p);
+
         strcpy( key.word, token);
         temp = hashmap_get(map, &key);
         if(!temp){
@@ -309,48 +465,54 @@ int main(int argc, char **argv){
 
         hashmap_scan(map,word_to_array,&data);
 
-        
-        // int sum = 0;
-        // for(int i = 0; i < data.i; i++)
-        //     sum += to_send_array[i].frequecy;
-        // printf("P(%d) data in array : %d last elemeent %s %d sum %d\n",rank,data.i,data.array[2].word,data.array[2].frequecy,sum);
+        #ifdef DEBUG
+            int sum = 0;
+            for(int i = 0; i < data.i; i++)
+                sum += to_send_array[i].frequecy;
+            printf("DBG P(%d) data in array : %d first elemeent %s %d sum %d\n",rank,data.i,data.array[0].word,data.array[0].frequecy,sum);
+        #endif
 
         MPI_Send(data.array, data.i, MPI_MY_WORD, 0, 1, MPI_COMM_WORLD);
 
         free(to_send_array);
 
-    }else if(rank == 0){
+    }else{
 
-        MPI_Status status;
-        int n_items[world_size];
+        int k = 1;
+        int flags[world_size],n_items[world_size];
+        MPI_Status status[world_size];
+        flags[0] = 0;
+        int curr_buff_size = 0;
+        Word *buff;
 
-        n_items[0] = 0;
+        while(k <= world_size-1)
+            for(int i=1; i < world_size; i++){
+                MPI_Iprobe(i, 1, MPI_COMM_WORLD, &flags[i], &status[i]);
+                if(flags[i]){
 
-        for(int i=1; i < world_size; i++){
-            MPI_Probe(i, 1, MPI_COMM_WORLD, &status);
-            MPI_Get_count(&status, MPI_MY_WORD, &n_items[i]);
-        }
+                    MPI_Get_count(&status[i], MPI_MY_WORD, &n_items[i]);
 
-        int max = calc_max(n_items,world_size);
+                    #ifdef DEBUG
+                        printf("DBG P(%d) %d size %d k %d\n",rank,i,n_items[i],k);
+                    #endif
 
-        Word *buff = malloc(sizeof(Word) * max);
-        if(!buff)
-            error_mpi("cannot allocate buff in master to recive data from workers.");
-        
-        for(int i=1; i < world_size; i++){
-            // printf("from %d recived %d\n",i,n_items[i]);
-            MPI_Recv(buff, n_items[i], MPI_MY_WORD, i, 1, MPI_COMM_WORLD, &status);
-            for (int j=0; j < n_items[i];j++){
+                    if(n_items[i] > curr_buff_size){
 
-                temp = hashmap_get(map, &buff[j]);
-                if(!temp){
-                    hashmap_set(map,&buff[j]);
+                        buff = realloc(buff,n_items[i]* sizeof(Word));
+                        if(!buff)
+                            error_mpi("cannot allocate buff in master to recive data from workers.");
+
+                        curr_buff_size = n_items[i];
+
+                        }
+    
+                    MPI_Recv(buff, n_items[i], MPI_MY_WORD, i, 1, MPI_COMM_WORLD, &status[i]);
+                  
+                    reduce(map,buff,n_items[i]);
+                    k++;
                 }
-                else
-                    temp->frequecy += buff[j].frequecy;
-
             }
-        }
+
 
         free(buff);
 
@@ -370,31 +532,46 @@ int main(int argc, char **argv){
         for(int i = 0; i < data.i; i++)
             sum += to_array[i].frequecy;
 
-        double end = MPI_Wtime();
+        double endtime = MPI_Wtime();
 
+        mergeSort(to_array, 0, data.i - 1);
 
+        char name[50];
 
-        printf("Word Size: %d Mapsize: %d total words : %d in %f\n",world_size,mapSize,sum,end - starttime);
+        #ifdef BENCHMARK
+            FILE *fpbm;
+            strcpy(name,OUTDIRNAME);
+            strcat(name,"benchmark.txt");
+            fpbm = fopen(name, "a");
+            fprintf(fpbm, "%d %f %f %f %d %ld %d \n",world_size,starttime,endtime,endtime-starttime,n,size,sum);
+        #endif
 
-        char filename[20];
-        sprintf(filename, "fileresult%d.txt",world_size);
-        FILE *fp = fopen( filename , "w" );
-        for(int i = 0; i < data.i; i++) 
-            fprintf(fp,"%s %d\n",data.array[i].word,data.array[i].frequecy);
-        //fwrite(buffer, 1 , buffer_size , fp );
-        fclose(fp);
+        printf("world size %d Mapsize: %d total words : %d in %f\n",world_size,mapSize,sum,endtime-starttime);
+
+        FILE *fpcsv;
+        strcpy(name,OUTDIRNAME);
+        strcat(name,"risultati.csv");
+        fpcsv = fopen(name, "w"); 
+        fprintf(fpcsv, "word,Frequency\n");
+        for (int i = 0; i < data.i; i++)
+            fprintf(fpcsv, "\"%s\",%d\n", to_array[i].word, to_array[i].frequecy);
+        fclose(fpcsv);
+
+        #ifdef DEBUG
+            char filename[20];
+            sprintf(filename, "fileresult%d.txt",world_size);
+            FILE *fp = fopen( filename , "w" );
+            for(int i = 0; i < data.i; i++) 
+                fprintf(fp,"%s %d\n",data.array[i].word,data.array[i].frequecy);
+            fclose(fp);
+        #endif
+
 
         free(to_array);
-        
-        //printf("\n-- iterate over all users --\n");
-        //hashmap_scan(map, word_iter, NULL);
-
-
-
     }
 
-    free(padding_buffer);
     MPI_Type_free(&MPI_MY_WORD);
+    MPI_Type_free(&MPI_MY_JOB);
     MPI_Finalize();
 
     return 0;
