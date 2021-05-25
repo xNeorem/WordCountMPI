@@ -10,6 +10,7 @@
       * [Separators table](#Separators-table)
       * [How the virtual file works](#How-the-virtual-file-works)
       * [How Algorithm works](#How-Algorithm-works)
+   * [Implementation details](#Implementation-details)
    * [Execution instructions](#Execution-instructions)
    * [Correctness discussion]()
    * [Benchmarks](#Benchmarking)
@@ -112,6 +113,7 @@ Setup
 -----
 ```bash
 mkdir out
+mkdir files
 ```
 
 Compile
@@ -122,6 +124,7 @@ make
 
 Run
 ---
+**⚠️Before run the command below put some file in files folder.**
 ```bash
 mpirun -np i --hostfile hostfile ./out/wordcount files/
 ```
@@ -163,7 +166,7 @@ where t(1) is the execution time with one processor, N is the number of processo
 
 The **Speedup** is computed using the following formula: 
 
-`t(1) \ t(N))`
+`t(1) \ t(N)`
 
 where t(1) is the execution time with one processor, N is the number of processors and t(N) the execution time with N processors.
 
@@ -226,7 +229,7 @@ As data shows, effincency constantly decrease as the number of processors rises.
 
 Results Interpretation
 ----------------------
-As the tests results show, the proposed solution does not scale well. In particoular, the efficency drop can be seen when the processors used are more than 4. So 4 could be considered as the "magic number" of processes which, if exceded, leads to an increasing communication overhead.
+As the tests results show, the proposed solution does not scale very well. In particoular, the efficency drop can be seen when the processors used are more than 10.
 
 How to Reproduce Test Results
 -----------------------------
@@ -238,4 +241,4 @@ If you are testing locally, you can simply use the following command:
 make benchmark
 ```
 
-**Be careful the `files` folder must be empty before this command.**
+**⚠️Be careful the `files` folder must be empty before this command.**
