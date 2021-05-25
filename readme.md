@@ -238,4 +238,4 @@ If you are testing locally, you can simply use the following command:
 make benchmark
 ```
 
-**Be careful the `files` folder must be empty before this command.**
+**⚠️ Be careful the `files` folder must be empty before this command.**
