@@ -12,7 +12,7 @@
       * [How Algorithm works](#How-Algorithm-works)
    * [Implementation details](#Implementation-details)
    * [Execution instructions](#Execution-instructions)
-   * [Correctness discussion]()
+   * [Correctness discussion](#Correctness-discussion)
    * [Benchmarks](#Benchmarking)
       * [Strong Scalability](#Strong-Scalability)
       * [Weak Scalability](#Weak-Scalability)
@@ -137,6 +137,28 @@ to clean possible previously compiled versions use
 make clean
 ```
 
+Correctness discussion
+======================
+The algorithm divides the input files trying to provide a portion as balanced as possible between the various processors available.
+Suppose you run on a single 10,000 word file such as `10000_lorem.txt`. All processors will load into memory the information useful for creating a virtual file.
+The master process will divide by the total size of the file to identify the optimal size of the block of bytes to be analyzed by each process, the block could undergo variations in size in two cases:
+1. At the end of the block there is a truncated word, in this case the master will increase the size of the block to include the word in question.
+2. The buffer exceeds the size of the virtual file, in this case the master reduces the size of the buffer to match the two sizes.
+
+In the first case, the verification takes place by dynamically accessing the file (the position of the file in the array is through a binary search algorithm to optimize performance) and dynamically accesses the end of the block by moving the filepointer thanks to the `seek` function. After that, again for performance reasons, it moves a portion of the file in a buffer starting from the end point of the block. Finally, the part of checking the truncation ends by identifying the first position of a separator and widening the block up to the position of the separator.
+
+Obviously in the computations of the next blocks we will start from the end point of the previous block.
+
+Once the blocks to be analyzed are computed, the master will send each job to each process through a `Scatter`.
+Each job contains the index of start and end of the block in the virtual file and the indexes of the first and last file that are inside that block.
+
+Each process that has received its job will allocate the buffer it needs to read the whole block and will load the data by reading from the files. If the block is between two or more files it will add a separator between the end and the beginning of the other, preventing the last and the first word of the next file from merging.
+
+Once the buffer has been filled up, it is used as a parameter to the `strtok` function which allows us to iterate over the words found between the seperators and then will be inserted into a hashmap as an element of the` Word` structure.
+
+Once this step is completed, all key-value pairs of the hashmap are transformed into an array and sent to the master.
+
+The master will receive according to the order of receipt of the message. Using the `Iprobe` function it computes the size of the payload and changes the size of its buffer if needed through a realloc. Having received the data, it adds them to its hashmap and completes the execution by saving a csv in alphabetical order of the word and frequency pairs.
 
 Implementation details
 ======================
