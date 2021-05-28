@@ -9,10 +9,11 @@
    * [Solution Approach](#Solution-Approach)
       * [Separators table](#Separators-table)
       * [How the virtual file works](#How-the-virtual-file-works)
-      * [How Algorithm works](#How-Algorithm-works)
+      * [How Algorithm works (high level)](#How-Algorithm-works-(high-level))
    * [Implementation details](#Implementation-details)
    * [Execution instructions](#Execution-instructions)
    * [Correctness discussion](#Correctness-discussion)
+      * [Example of execution](#Example-of-execution)
    * [Benchmarks](#Benchmarking)
       * [Strong Scalability](#Strong-Scalability)
       * [Weak Scalability](#Weak-Scalability)
@@ -94,7 +95,7 @@ If a processor is required to read bytes 2000 to 3000, doing a binary search wil
 
 This allows each processor to work as if it were a single file. Thanks to this abstraction, a job (job per processor) can be defined as two integers that indicate the beginning and the end of the block of bytes to be processed.
 
-How Algorithm works
+How Algorithm works (high level)
 ------------------
 1. The master process recieves from CLI a directory path that contains files in which are written all the words need to be counted.
 
@@ -121,12 +122,20 @@ Compile
 ```bash
 make 
 ```
+**🛠️ There are some flags that can help you in debugging and benchmarking reporting.**
+
+Send to the hitter the following directives `BENCHMARK` to activate the performance log and `DEBUG` for the debug logs.
+
+Example to enable **both**:
+```bash
+mpicc -D DEBUG -D BENCHMARK -o ./out/wordcount hashmap.c wordcount.c
+```
 
 Run
 ---
-**⚠️Before run the command below put some file in files folder.**
+**⚠️ Before run the command below put some file in files folder.**
 ```bash
-mpirun -np i --hostfile hostfile ./out/wordcount files/
+mpirun -np $numberofinstances --hostfile hostfile ./out/wordcount $filesdirectory
 ```
 or 
 ```bash
@@ -140,7 +149,7 @@ make clean
 Correctness discussion
 ======================
 The algorithm divides the input files trying to provide a portion as balanced as possible between the various processors available.
-Suppose you run on a single 10,000 word file such as `10000_lorem.txt`. All processors will load into memory the information useful for creating a virtual file.
+All processors will load into memory the information useful for creating a virtual file.
 The master process will divide by the total size of the file to identify the optimal size of the block of bytes to be analyzed by each process, the block could undergo variations in size in two cases:
 1. At the end of the block there is a truncated word, in this case the master will increase the size of the block to include the word in question.
 2. The buffer exceeds the size of the virtual file, in this case the master reduces the size of the buffer to match the two sizes.
@@ -154,11 +163,51 @@ Each job contains the index of start and end of the block in the virtual file an
 
 Each process that has received its job will allocate the buffer it needs to read the whole block and will load the data by reading from the files. If the block is between two or more files it will add a separator between the end and the beginning of the other, preventing the last and the first word of the next file from merging.
 
-Once the buffer has been filled up, it is used as a parameter to the `strtok` function which allows us to iterate over the words found between the seperators and then will be inserted into a hashmap as an element of the` Word` structure.
+Once the buffer has been filled up, it is used as a parameter to the `strtok` function which allows us to iterate over the words found between the seperators and then will be inserted into a hashmap as an element of the `Word` structure.
 
 Once this step is completed, all key-value pairs of the hashmap are transformed into an array and sent to the master.
 
 The master will receive according to the order of receipt of the message. Using the `Iprobe` function it computes the size of the payload and changes the size of its buffer if needed through a realloc. Having received the data, it adds them to its hashmap and completes the execution by saving a csv in alphabetical order of the word and frequency pairs.
+
+Example of execution
+--------------------
+We will use for this execution **3 processors** and **two files** found in the `other_files/` directory that is '1000_lorem.txt' and '1000_lorem_2.txt'.
+
+Each process will create its own virtual file thus composed.
+
+`[{name: 10000_lorem.txt, file_size : 68038,index: 0},{name: 10000_lorem_2.txt, file_size : 68038,index: 68038}]`
+
+So the size of the virtual file is 136076 bytes,therefore 45359 bytes for each process, since 136076 is not divisible by 3, **one byte is added to the buffer size at all**.
+
+The master will calculate each job using 45359 as the initial size and then adding the padding size for each one.
+
+The first process will have 2-character padding since its block ends with this string "...enim, eget laore`|`et`\`arcu lectus ac eros..." (The `|` symbol indicates where ended its block before padding and `\` after padding).
+
+So processor 0 will start at 0 and finish 45361.
+
+The second process will have 6-character padding since its block ends with this string "...Praesent ultrices malesuada con`|`vallis`\`..."
+
+The third and final process will have a -9 character padding. Since its block initially ended at 136085 but since it exceeds the size of the virtual file (136076) its buffer will be reduced to match the two sizes.
+
+The master, once the jobs have been sent to all processors, will fill their buffers with file data.
+
+Processor 0 reads bytes 0 to 45361 found in the first file.
+
+Processor 1 reads bytes 45361 to 90726 which is between the first file and the second file.
+
+Processor 2 reads bytes 90726 to 136076 which is between the first file and the second file.
+
+Once the word frequency has been calculated they will send the contents of their hashmap to the terminado Master process.
+
+The Master will add all this information to his hashmap and print his report. Reporting that the total words are 2000.
+
+**If you want to restart this execution just recompile in debug, add only the two files in the directory and send the following command.**
+
+```bash
+mpirun -np 3 ./out/wordcount ./files/
+```
+
+It will save in the project root the data read in each buffer and the result of the computation.
 
 Implementation details
 ======================
@@ -175,7 +224,7 @@ Benchmarking
 
 The solution has been tested over a cluster of 4 AWS EC2 m4.xlarge (4 virtual processor, 16 GB RAM) Ubuntu instances using the files inside the `files/` folder as input. Here are reported the results in terms of **Weak** and **Strong Scalability**,  which means using an increasing number of processors over a fixed input and using an increasing number of processors with the load-per-processor fixed respectively. Reported data are a mean of several executions. In a further section will be explained how to reproduce results. 
 
-**All the benchmarks were repeated several times, the results reported are an average of all the executions carried out. Raw data can be viewed here.**
+**All the benchmarks were repeated several times, the results reported are an average of all the executions carried out. Raw data can be viewed [here](./benchmarks/benchmark.txt).**
 
 Strong Scalability
 ------------------
