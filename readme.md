@@ -5,7 +5,7 @@
 ## Index
 <!--ts-->
    * [Introduction](#Introduction)
-   * [Problem Statemen](#Problem-Statemen)
+   * [Problem Statement](#Problem-Statement)
    * [Solution Approach](#Solution-Approach)
       * [Separators table](#Separators-table)
       * [How Algorithm works (high level)](#How-Algorithm-works-(high-level))
@@ -24,7 +24,7 @@ Introduction
 This is a simple parallel implementation of words count using Open MPI developed in the context of Parallel, Concurrent and Cloud programming course at the University of Salerno.
 
 
-Problem Statemen
+Problem Statement
 ================
 
 We will be doing a version of map-reduce using MPI to perform word counting over a large number of files. There are 3 steps to this process:
@@ -278,7 +278,7 @@ Here are reported data for weak scalability test. Input per process ratio is 330
 
 where t(1) is the execution time with one processor and t(N) the execution time with N processors.
 
-|Processors|Execution Times|Weak Scaling Efficiency| Problem Size
+|Processors|Execution Times|Weak Scaling Speedup| Problem Size
 |:---:|:---:|:---:|:---:|
 1|1.45|1.0|33091001
 2|1.68|0.86|66182002
