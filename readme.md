@@ -312,7 +312,7 @@ In this project there was a huge effort to minimize file reading. Reading the da
 
 How to Reproduce Test Results
 -----------------------------
-To reproduce the same results on the aws cluster it is necessary to allocate 4 m4.xlarge nodes and use 60 copies of `other_files/merged_file.txt` for strong scalability instead for weak scalability one copy for each processor used in the execution of `other_files /merged_file_2times.txt`.
+To reproduce the same results on the aws cluster it is necessary to allocate 4 m4.xlarge nodes and use 60 copies of `other_files/merged_file.txt` for strong scalability instead for weak scalability one copy for each processor used in the execution of `other_files/merged_file_2times.txt`.
 
 If you are testing locally, you can simply use the following command:
 
