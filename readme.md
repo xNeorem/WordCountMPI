@@ -8,9 +8,9 @@
    * [Problem Statemen](#Problem-Statemen)
    * [Solution Approach](#Solution-Approach)
       * [Separators table](#Separators-table)
-      * [How the virtual file works](#How-the-virtual-file-works)
       * [How Algorithm works (high level)](#How-Algorithm-works-(high-level))
    * [Implementation details](#Implementation-details)
+      * [How the virtual file works](#How-the-virtual-file-works)
    * [Execution instructions](#Execution-instructions)
    * [Correctness discussion](#Correctness-discussion)
       * [Example of execution](#Example-of-execution)
@@ -60,39 +60,6 @@ Separator |
 `"` |
 `?` |
 `!` |
-
-How the virtual file works
---------------------------
-
-Each processor reads all the files inside the folder, and in alphanumeric order, loads an element of the `MyFile` structure into an array.
-MyFile is made up of simple attributes.
-```c
-   struct MyFile{
-    char name[FILENAME_SIZE]; //file name
-    long file_size; //file size
-    long index; //attribute usefull for virtual file
-   }
-```
-The `index` attribute allows the creation of the virtual array.
-It is calculated as the sum of the size of the previous files. Through this index it is possible to work on several files as if it were one.
-
-For example we have 3 files:
-
-name|size (bytes)|
-:---:|:---:|
-`a.txt` | 3000 |
-`b.txt` | 6000 |
-`c.txt` | 1000 |
-
-we will have an array with the 3 elements:
-
-0. `{name: "a.txt", size: 3000, index: 0}`
-1. `{name: "b.txt", size: 6000, index: 3000}`
-2. `{name: "c.txt", size: 1000, index: 9000}`
-
-If a processor is required to read bytes 2000 to 3000, doing a binary search will find the file `a.txt`. On the other hand, if a processor has to read bytes from 8000 to 10,000, with a light binary search from bytes 5000 to 6000 from the `b.txt` file and the remaining 1000 from the `c.txt` file.
-
-This allows each processor to work as if it were a single file. Thanks to this abstraction, a job (job per processor) can be defined as two integers that indicate the beginning and the end of the block of bytes to be processed.
 
 How Algorithm works (high level)
 ------------------
@@ -222,6 +189,39 @@ To allow easier communication, structures such as **MPI Datatypes** have been de
 
 
 This solution has been developed using  `Scatter` to send one job to everyone, `Iprobe` and `Recv` communication routines to receive from each process in order of completion, by calculating the size of the payload being received. The execution time is computed using the `Wtime` function.
+
+How the virtual file works
+--------------------------
+
+Each processor reads all the files inside the folder, and in alphanumeric order, loads an element of the `MyFile` structure into an array.
+MyFile is made up of simple attributes.
+```c
+   struct MyFile{
+    char name[FILENAME_SIZE]; //file name
+    long file_size; //file size
+    long index; //attribute usefull for virtual file
+   }
+```
+The `index` attribute allows the creation of the virtual array.
+It is calculated as the sum of the size of the previous files. Through this index it is possible to work on several files as if it were one.
+
+For example we have 3 files:
+
+name|size (bytes)|
+:---:|:---:|
+`a.txt` | 3000 |
+`b.txt` | 6000 |
+`c.txt` | 1000 |
+
+we will have an array with the 3 elements:
+
+0. `{name: "a.txt", size: 3000, index: 0}`
+1. `{name: "b.txt", size: 6000, index: 3000}`
+2. `{name: "c.txt", size: 1000, index: 9000}`
+
+If a processor is required to read bytes 2000 to 3000, doing a binary search will find the file `a.txt`. On the other hand, if a processor has to read bytes from 8000 to 10,000, with a light binary search from bytes 5000 to 6000 from the `b.txt` file and the remaining 1000 from the `c.txt` file.
+
+This allows each processor to work as if it were a single file. Thanks to this abstraction, a job (job per processor) can be defined as two integers that indicate the beginning and the end of the block of bytes to be processed.
 
 Benchmarking
 ============
