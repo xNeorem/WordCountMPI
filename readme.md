@@ -36,13 +36,12 @@ We will be doing a version of map-reduce using MPI to perform word counting over
 Solution Approach
 =================
 Before describing the solution algorithm, some **preliminary assumptions** must be carried out.
-The algorithm considers a **byte** as **work unit**. So, each process recieves an equal amount of bytes and counts the words present in them.
-To achieve a balanced workload among all the processes, a **preliminary stage**, described below, **of parrallel line counting is performed**.
+The algorithm considers a **byte** as **work unit**. So, each process recieves a block of bytes and counts the words present in them. Blocks can be **unbalanced** between processors, in case there are truncated words at its end.
 
 Another preliminary assumption must be made: **each process can access to all the input files and make a *virtual single file* that contains all the words between the various files**. If the program is run in distributed memory, each node of the cluster must share the same directory structure and the same set of files.
 
 Last but not least, **each computation step** described below **is performed both by the master and the slaves**. Operation made exclusively by the master are explicitly mentioned.
-A word is considered as a sequence of alphanumeric symbols that are separate with a **separator** (you can see a separators table down below), so "*3D*", for example, is cosidered a word.
+A word is considered as a sequence of alphanumeric symbols that are separate with a **separator** (you can see a separators table down below), so in the string "*3D, is a word?*", for example, "3D","is","a" and "word" are cosidered words.
 
 Separators table
 ----------------
@@ -161,7 +160,7 @@ The master process will divide by the total size of the file to identify the opt
 
 In the first case, the verification takes place by dynamically accessing the file (the position of the file in the array is through a binary search algorithm to optimize performance) and dynamically accesses the end of the block by moving the filepointer thanks to the `seek` function. After that, again for performance reasons, it moves a portion of the file in a buffer starting from the end point of the block. Finally, the part of checking the truncation ends by identifying the first position of a separator and widening the block up to the position of the separator.
 
-Obviously in the computations of the next blocks we will start from the end point of the previous block.
+**Obviously in the computations of the next blocks we will start from the end point of the previous block.**
 
 Once the blocks to be analyzed are computed, the master will send each job to each process through a `Scatter`.
 Each job contains the index of start and end of the block in the virtual file and the indexes of the first and last file that are inside that block.
@@ -275,7 +274,7 @@ Weak Scalability
 
 Here are reported data for weak scalability test. Input per process ratio is 33091001:1 (33.091001MB:1). The **Weak Scaling Efficency** is computed using the following formula: 
 
-t(1)/t(N)
+`t(1) / t(N)`
 
 where t(1) is the execution time with one processor and t(N) the execution time with N processors.
 
