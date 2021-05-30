@@ -197,11 +197,11 @@ Processor 1 reads bytes 45361 to 90726 which is between the first file and the s
 
 Processor 2 reads bytes 90726 to 136076 which is between the first file and the second file.
 
-Once the word frequency has been calculated they will send the contents of their hashmap to the terminado Master process.
+Once the word frequency is calculated, they will send the contents of their hashmap to the process terminating Master.
 
 The Master will add all this information to his hashmap and print his report. Reporting that the total words are 2000.
 
-**If you want to restart this execution just recompile in debug, add only the two files in the directory and send the following command.**
+**If you want to restart this execution just recompile in debug, add only the two files in the directory `files` and send the following command.**
 
 ```bash
 mpirun -np 3 ./out/wordcount ./files/
