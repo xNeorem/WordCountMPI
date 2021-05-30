@@ -114,7 +114,6 @@ Setup
 -----
 ```bash
 mkdir out
-mkdir files
 ```
 
 Compile
@@ -135,9 +134,15 @@ Run
 ---
 **⚠️ Before run the command below put some file in files folder.**
 ```bash
-mpirun -np $numberofinstances --hostfile hostfile ./out/wordcount $filesdirectory
+mpirun -np $numberofinstances --hostfile $hostfile ./out/wordcount $filesdirectory
 ```
-or 
+or if your are in localy run
+```bash
+mpirun --allow-run-as-root -np $numberofinstances ./out/wordcount $filesdirectory
+```
+otherwise you can use a makefile command to run
+
+**PS. look in the makefile to change the parameters.**
 ```bash
 make run
 ```
